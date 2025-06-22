@@ -1,17 +1,22 @@
-const express = require('express');
+const http = require('http');
+const url = require('url');
 
-const app = express();
 const PORT = 3001;
 
-// Middleware to parse JSON bodies
-app.use(express.json());
-
-// Middleware to parse URL-encoded bodies
-app.use(express.urlencoded({ extended: true }));
-
 // Helper function to extract webhook details
-function extractWebhookDetails(req) {
-  const data = req.body;
+function extractWebhookDetails(body) {
+  let data;
+  try {
+    data = JSON.parse(body);
+  } catch (e) {
+    return {
+      cardTitle: 'N/A',
+      boardName: 'N/A', 
+      listName: 'N/A',
+      username: 'N/A'
+    };
+  }
+
   let details = {
     cardTitle: 'N/A',
     boardName: 'N/A', 
@@ -43,94 +48,131 @@ function extractWebhookDetails(req) {
   return details;
 }
 
-// Root endpoint - handles webhooks sent to the base URL
-app.post('/', (req, res) => {
-  const details = extractWebhookDetails(req);
-  console.log(`Webhook POST received via /`);
-  console.log(`  Card: ${details.cardTitle}`);
-  console.log(`  Board: ${details.boardName}`);
-  console.log(`  List: ${details.listName}`);
-  console.log(`  User: ${details.username}`);
-  
-  // Respond with success
-  res.status(200).json({ 
-    status: 'success', 
-    message: 'Webhook received successfully at root endpoint',
-    timestamp: new Date().toISOString()
-  });
-});
+// Helper function to send JSON response
+function sendJsonResponse(res, statusCode, data) {
+  res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(data));
+}
 
-// Root GET endpoint for basic info
-app.get('/', (req, res) => {
-  res.status(200).json({ 
-    name: 'Planka Webhook Server',
-    version: '1.0.0',
-    status: 'running',
-    endpoints: {
-      root: 'POST / - Accepts webhooks (auto-detects format)',
-      webhook: 'POST /webhook - Standard webhook endpoint',
-      apprise: 'POST /apprise - Apprise format endpoint',
-      health: 'GET /health - Health check'
-    },
-    timestamp: new Date().toISOString()
+// Helper function to read request body
+function readRequestBody(req) {
+  return new Promise((resolve) => {
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+    req.on('end', () => {
+      resolve(body);
+    });
   });
-});
+}
 
-// Webhook endpoint for Planka
-app.post('/webhook', (req, res) => {
-  const details = extractWebhookDetails(req);
-  console.log(`Webhook POST received via /webhook`);
-  console.log(`  Card: ${details.cardTitle}`);
-  console.log(`  Board: ${details.boardName}`);
-  console.log(`  List: ${details.listName}`);
-  console.log(`  User: ${details.username}`);
-  
-  // Respond with success
-  res.status(200).json({ 
-    status: 'success', 
-    message: 'Webhook received successfully',
-    timestamp: new Date().toISOString()
-  });
-});
+// Create HTTP server
+const server = http.createServer(async (req, res) => {
+  const parsedUrl = url.parse(req.url, true);
+  const path = parsedUrl.pathname;
+  const method = req.method;
 
-// Apprise endpoint for Planka
-app.post('/apprise', (req, res) => {
-  const details = extractWebhookDetails(req);
-  console.log(`Webhook POST received via /apprise`);
-  console.log(`  Card: ${details.cardTitle}`);
-  console.log(`  Board: ${details.boardName}`);
-  console.log(`  List: ${details.listName}`);
-  console.log(`  User: ${details.username}`);
-  
-  // Respond with success
-  res.status(200).json({ 
-    status: 'success', 
-    message: 'Apprise webhook received successfully',
-    timestamp: new Date().toISOString()
-  });
-});
+  // Handle CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'healthy', 
-    message: 'Webhook server is running',
-    timestamp: new Date().toISOString()
-  });
-});
+  // Handle OPTIONS requests
+  if (method === 'OPTIONS') {
+    res.writeHead(200);
+    res.end();
+    return;
+  }
 
-// Catch-all route for any other requests
-app.all('*', (req, res) => {
-  console.log(`⚠️  Unhandled ${req.method} request to ${req.url}`);
-  res.status(404).json({ 
-    error: 'Not found',
-    message: 'This endpoint is not configured',
-    availableEndpoints: ['POST /', 'POST /webhook', 'POST /apprise', 'GET /', 'GET /health']
-  });
+  // Read request body for POST requests
+  let body = '';
+  if (method === 'POST') {
+    body = await readRequestBody(req);
+  }
+
+  // Route handling
+  if (method === 'POST' && path === '/') {
+    // Root endpoint - handles webhooks sent to the base URL
+    const details = extractWebhookDetails(body);
+    console.log(`Webhook POST received via /`);
+    console.log(`  Card: ${details.cardTitle}`);
+    console.log(`  Board: ${details.boardName}`);
+    console.log(`  List: ${details.listName}`);
+    console.log(`  User: ${details.username}`);
+    
+    sendJsonResponse(res, 200, {
+      status: 'success',
+      message: 'Webhook received successfully at root endpoint',
+      timestamp: new Date().toISOString()
+    });
+
+  } else if (method === 'GET' && path === '/') {
+    // Root GET endpoint for basic info
+    sendJsonResponse(res, 200, {
+      name: 'Planka Webhook Server',
+      version: '1.0.0',
+      status: 'running',
+      endpoints: {
+        root: 'POST / - Accepts webhooks (auto-detects format)',
+        webhook: 'POST /webhook - Standard webhook endpoint',
+        apprise: 'POST /apprise - Apprise format endpoint',
+        health: 'GET /health - Health check'
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } else if (method === 'POST' && path === '/webhook') {
+    // Webhook endpoint for Planka
+    const details = extractWebhookDetails(body);
+    console.log(`Webhook POST received via /webhook`);
+    console.log(`  Card: ${details.cardTitle}`);
+    console.log(`  Board: ${details.boardName}`);
+    console.log(`  List: ${details.listName}`);
+    console.log(`  User: ${details.username}`);
+    
+    sendJsonResponse(res, 200, {
+      status: 'success',
+      message: 'Webhook received successfully',
+      timestamp: new Date().toISOString()
+    });
+
+  } else if (method === 'POST' && path === '/apprise') {
+    // Apprise endpoint for Planka
+    const details = extractWebhookDetails(body);
+    console.log(`Webhook POST received via /apprise`);
+    console.log(`  Card: ${details.cardTitle}`);
+    console.log(`  Board: ${details.boardName}`);
+    console.log(`  List: ${details.listName}`);
+    console.log(`  User: ${details.username}`);
+    
+    sendJsonResponse(res, 200, {
+      status: 'success',
+      message: 'Apprise webhook received successfully',
+      timestamp: new Date().toISOString()
+    });
+
+  } else if (method === 'GET' && path === '/health') {
+    // Health check endpoint
+    sendJsonResponse(res, 200, {
+      status: 'healthy',
+      message: 'Webhook server is running',
+      timestamp: new Date().toISOString()
+    });
+
+  } else {
+    // Catch-all route for any other requests
+    console.log(`⚠️  Unhandled ${method} request to ${path}`);
+    sendJsonResponse(res, 404, {
+      error: 'Not found',
+      message: 'This endpoint is not configured',
+      availableEndpoints: ['POST /', 'POST /webhook', 'POST /apprise', 'GET /', 'GET /health']
+    });
+  }
 });
 
 // Start the server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Webhook server is running on port ${PORT}`);
   console.log(`📡 Root webhook URL: http://localhost:${PORT}/`);
   console.log(`📡 Webhook URL: http://localhost:${PORT}/webhook`);
@@ -143,10 +185,14 @@ app.listen(PORT, () => {
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\n🛑 Shutting down webhook server...');
-  process.exit(0);
+  server.close(() => {
+    process.exit(0);
+  });
 });
 
 process.on('SIGTERM', () => {
   console.log('\n🛑 Shutting down webhook server...');
-  process.exit(0);
+  server.close(() => {
+    process.exit(0);
+  });
 }); 
