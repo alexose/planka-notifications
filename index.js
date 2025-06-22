@@ -3,35 +3,35 @@ const url = require('url');
 
 const PORT = 3001;
 
+// Default webhook details
+const DEFAULT_DETAILS = {
+  cardTitle: 'N/A',
+  boardName: 'N/A', 
+  listName: 'N/A',
+  username: 'N/A'
+};
+
 // Helper function to extract webhook details
 function extractWebhookDetails(body) {
   let data;
   try {
     data = JSON.parse(body);
   } catch (e) {
-    return {
-      cardTitle: 'N/A',
-      boardName: 'N/A', 
-      listName: 'N/A',
-      username: 'N/A'
-    };
+    return { ...DEFAULT_DETAILS };
   }
 
-  let details = {
-    cardTitle: 'N/A',
-    boardName: 'N/A', 
-    listName: 'N/A',
-    username: 'N/A'
-  };
+  let details = { ...DEFAULT_DETAILS };
 
   // Handle Planka webhook format
-  if (data.data && data.data.item) {
-    details.cardTitle = data.data.item.name || 'N/A';
-    details.username = data.user?.name || data.user?.username || 'N/A';
+  const { data: webhookData, user } = data || {};
+  const { item, included } = webhookData || {};
+  
+  if (item) {
+    details.cardTitle = item.name || 'N/A';
+    details.username = user?.name || user?.username || 'N/A';
     
     // Extract board and list from included data
-    const boards = data.data.included?.boards;
-    const lists = data.data.included?.lists;
+    const { boards, lists } = included || {};
     
     details.boardName = boards?.[0]?.name || 'N/A';
     details.listName = lists?.[0]?.name || 'N/A';
