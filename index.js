@@ -161,13 +161,27 @@ server.listen(PORT, () => {
 process.on('SIGINT', () => {
   console.log('\n🛑 Shutting down webhook server...');
   server.close(() => {
+    console.log('✅ Server closed successfully');
     process.exit(0);
   });
+  
+  // Force exit after 5 seconds if server doesn't close
+  setTimeout(() => {
+    console.log('⚠️  Forcing shutdown...');
+    process.exit(1);
+  }, 5000);
 });
 
 process.on('SIGTERM', () => {
   console.log('\n🛑 Shutting down webhook server...');
   server.close(() => {
+    console.log('✅ Server closed successfully');
     process.exit(0);
   });
+  
+  // Force exit after 5 seconds if server doesn't close
+  setTimeout(() => {
+    console.log('⚠️  Forcing shutdown...');
+    process.exit(1);
+  }, 5000);
 }); 
