@@ -84,30 +84,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Route handling
-  if (method === 'POST' && path === '/') {
-    // Root endpoint - handles webhooks sent to the base URL
-    const details = extractWebhookDetails(body);
-    console.log(`Webhook POST received via /`);
-    console.log(`  Card: ${details.cardTitle}`);
-    console.log(`  Board: ${details.boardName}`);
-    console.log(`  List: ${details.listName}`);
-    console.log(`  User: ${details.username}`);
-    
-    sendJsonResponse(res, 200, {
-      status: 'success',
-      message: 'Webhook received successfully at root endpoint',
-      timestamp: new Date().toISOString()
-    });
-
-  } else if (method === 'GET' && path === '/') {
+  if (method === 'GET' && path === '/') {
     // Root GET endpoint for basic info
     sendJsonResponse(res, 200, {
       name: 'Planka Webhook Server',
       version: '1.0.0',
       status: 'running',
       endpoints: {
-        root: 'POST / - Accepts webhooks',
-        webhook: 'POST /webhook - Standard webhook endpoint',
+        webhook: 'POST /webhook - Webhook endpoint',
         health: 'GET /health - Health check'
       },
       timestamp: new Date().toISOString()
@@ -142,7 +126,7 @@ const server = http.createServer(async (req, res) => {
     sendJsonResponse(res, 404, {
       error: 'Not found',
       message: 'This endpoint is not configured',
-      availableEndpoints: ['POST /', 'POST /webhook', 'GET /', 'GET /health']
+      availableEndpoints: ['POST /webhook', 'GET /', 'GET /health']
     });
   }
 });
@@ -150,7 +134,6 @@ const server = http.createServer(async (req, res) => {
 // Start the server
 server.listen(PORT, () => {
   console.log(`🚀 Webhook server is running on port ${PORT}`);
-  console.log(`📡 Root webhook URL: http://localhost:${PORT}/`);
   console.log(`📡 Webhook URL: http://localhost:${PORT}/webhook`);
   console.log(`🏥 Health check: http://localhost:${PORT}/health`);
   console.log(`⏰ Started at: ${new Date().toISOString()}`);
