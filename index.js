@@ -31,14 +31,12 @@ function extractWebhookDetails(body) {
     details.username = data.user?.name || data.user?.username || 'N/A';
     
     // Extract board and list from included data
-    if (data.data.included) {
-      if (data.data.included.boards && data.data.included.boards.length > 0) {
-        details.boardName = data.data.included.boards[0].name || 'N/A';
-      }
-      if (data.data.included.lists && data.data.included.lists.length > 0) {
-        details.listName = data.data.included.lists[0].name || 'N/A';
-      }
-    }
+    const boards = data.data.included?.boards;
+    const lists = data.data.included?.lists;
+    
+    details.boardName = boards?.[0]?.name || 'N/A';
+    details.listName = lists?.[0]?.name || 'N/A';
+    
   } else if (data.title) {
     // Apprise format - title might contain card info
     details.cardTitle = data.title;
