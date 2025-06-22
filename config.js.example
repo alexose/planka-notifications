@@ -1,0 +1,14 @@
+// Example configuration file
+// Copy this to config.js and update with your actual values
+
+module.exports = {
+  // Access token for webhook authentication
+  // This should match the token configured in your Docker Compose file
+  accessToken: 'your-secret-access-token-here',
+  
+  // Server configuration
+  port: 3001,
+  
+  // Optional: Log level for debugging
+  logLevel: 'info' // 'debug', 'info', 'warn', 'error'
+}; 

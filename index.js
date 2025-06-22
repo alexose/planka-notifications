@@ -1,7 +1,16 @@
 const http = require('http');
 const url = require('url');
 
-const PORT = 3001;
+// Load configuration
+let config;
+try {
+  config = require('./config.js');
+} catch (error) {
+  console.error('❌ Error loading config.js. Please copy config.js.example to config.js and update the values.');
+  process.exit(1);
+}
+
+const PORT = config.port || 3001;
 
 // Default webhook details
 const DEFAULT_DETAILS = {
@@ -104,6 +113,17 @@ function readRequestBody(req) {
   });
 }
 
+// Helper function to validate access token
+function validateAccessToken(req) {
+  const authHeader = req.headers.authorization;
+  const tokenHeader = req.headers['x-access-token'];
+  const queryToken = url.parse(req.url, true).query.token;
+  
+  const providedToken = authHeader?.replace('Bearer ', '') || tokenHeader || queryToken;
+  
+  return providedToken === config.accessToken;
+}
+
 // Create HTTP server
 const server = http.createServer(async (req, res) => {
   const parsedUrl = url.parse(req.url, true);
@@ -113,19 +133,13 @@ const server = http.createServer(async (req, res) => {
   // Handle CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Access-Token');
 
   // Handle OPTIONS requests
   if (method === 'OPTIONS') {
     res.writeHead(200);
     res.end();
     return;
-  }
-
-  // Read request body for POST requests
-  let body = '';
-  if (method === 'POST') {
-    body = await readRequestBody(req);
   }
 
   // Route handling
@@ -136,13 +150,27 @@ const server = http.createServer(async (req, res) => {
       version: '1.0.0',
       status: 'running',
       endpoints: {
-        webhook: 'POST /webhook - Webhook endpoint',
+        webhook: 'POST /webhook - Webhook endpoint (requires access token)',
         health: 'GET /health - Health check'
       },
       timestamp: new Date().toISOString()
     });
 
   } else if (method === 'POST' && path === '/webhook') {
+    // Validate access token for webhook endpoint
+    if (!validateAccessToken(req)) {
+      console.log(`⚠️  Unauthorized webhook attempt from ${req.socket.remoteAddress}`);
+      sendJsonResponse(res, 401, {
+        error: 'Unauthorized',
+        message: 'Invalid or missing access token',
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
+    // Read request body for POST requests
+    const body = await readRequestBody(req);
+    
     // Webhook endpoint for Planka
     const details = extractWebhookDetails(body);
     console.log(`Webhook POST received via /webhook`);
@@ -187,6 +215,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`🚀 Webhook server is running on port ${PORT}`);
   console.log(`📡 Webhook URL: http://localhost:${PORT}/webhook`);
+  console.log(`🔐 Access token required for webhook endpoint`);
   console.log(`🏥 Health check: http://localhost:${PORT}/health`);
   console.log(`⏰ Started at: ${new Date().toISOString()}`);
   console.log('\nWaiting for Planka webhooks...\n');
