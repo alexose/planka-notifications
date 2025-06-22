@@ -20,12 +20,43 @@ const DEFAULT_DETAILS = {
   username: 'N/A',
   slackChannels: [],
   commentText: null,
-  isComment: false
+  isComment: false,
+  description: null
 };
 
-// Helper function to parse card description for Slack channels
-function parseSlackChannels(description) {
-  if (!description) return [];
+/**
+ * Parses a description for Slack channel notifications.
+ * 
+ * This function looks for lines that contain the words "notify" or "notification"
+ * and extracts any Slack channel names that start with an ampersand (&) or hash (#).
+ * 
+ * Slack channel prefixes:
+ * - & (ampersand) - for shared channels
+ * - # (hash/pound) - for regular channels
+ * 
+ * The function is flexible and handles various formats:
+ * - "notify &general" → finds &general
+ * - "notification: #team-alpha" → finds #team-alpha  
+ * - "please notify &urgent, #important" → finds &urgent, #important
+ * - "NOTIFY &channel-name" → finds &channel-name (case insensitive)
+ * - "notify &channel1 #channel2 &channel3" → finds all three channels
+ * 
+ * @param {string} description - The text to parse for notifications
+ * @returns {string[]} Array of Slack channel names (including the prefix symbol)
+ * 
+ * @example
+ * const description = `
+ *   This is a regular description line
+ *   notify &general #team-alpha
+ *   Another line with notification: &urgent
+ * `;
+ * const channels = parseNotifyChannels(description);
+ * // Returns: ['&general', '#team-alpha', '&urgent']
+ */
+function parseNotifyChannels(description) {
+  if (!description || typeof description !== 'string') {
+    return [];
+  }
   
   const channels = [];
   const lines = description.split('\n');
@@ -33,17 +64,59 @@ function parseSlackChannels(description) {
   for (const line of lines) {
     const trimmedLine = line.trim();
     
-    // Check if line starts with "notify"
-    if (trimmedLine.toLowerCase().startsWith('notify')) {
-      // Find all strings starting with ampersand
-      const ampersandMatches = trimmedLine.match(/&[^\s]+/g);
-      if (ampersandMatches) {
-        channels.push(...ampersandMatches);
+    // Check if line contains "notify" or "notification" (case insensitive)
+    if (trimmedLine.toLowerCase().includes('notify') || 
+        trimmedLine.toLowerCase().includes('notification')) {
+      
+      // Find all strings starting with & or # followed by valid channel characters
+      // This regex matches: & or # + one or more word characters, hyphens, or underscores
+      const channelMatches = trimmedLine.match(/[&#][a-zA-Z0-9_-]+/g);
+      
+      if (channelMatches) {
+        // Add unique channels only (avoid duplicates)
+        for (const channel of channelMatches) {
+          if (!channels.includes(channel)) {
+            channels.push(channel);
+          }
+        }
       }
     }
   }
   
   return channels;
+}
+
+// Helper function to determine if a notification should be sent
+function shouldSendNotification(event, details) {
+  // Send notifications for relevant card events and comment events
+  const relevantEvents = [
+    'cardCreate',
+    'cardUpdate', 
+    'cardEdit',
+    'cardMove',
+    'cardArchive',
+    'cardRestore',
+    'commentCreate',
+    'commentUpdate'
+  ];
+  
+  return relevantEvents.includes(event) && details.slackChannels.length > 0;
+}
+
+// Helper function to send notification (placeholder for now)
+function sendNotification(event, details) {
+  console.log(`🔔 NOTIFICATION SHOULD BE SENT:`);
+  console.log(`  Event: ${event}`);
+  console.log(`  Card: ${details.cardTitle}`);
+  console.log(`  Board: ${details.boardName}`);
+  console.log(`  List: ${details.listName}`);
+  console.log(`  User: ${details.username}`);
+  console.log(`  Channels: ${details.slackChannels.join(', ')}`);
+  console.log(`  Description: ${details.description || 'N/A'}`);
+  console.log(`  ---`);
+  
+  // TODO: Integrate with Slack API here
+  // For now, just log that notification should be sent
 }
 
 // Helper function to extract webhook details
@@ -67,14 +140,16 @@ function extractWebhookDetails(body) {
       details.isComment = true;
       details.commentText = item.text || item.content || 'N/A';
       
-      // Try to get card title from included cards data
+      // Try to get card title and description from included cards data
       const cards = included?.cards;
       if (cards && cards.length > 0) {
         details.cardTitle = cards[0].name || 'N/A';
+        details.description = cards[0].description || null;
       }
     } else {
       // For regular card events, title is in item.name
       details.cardTitle = item.name || 'N/A';
+      details.description = item.description || null;
     }
     
     details.username = user?.name || user?.username || 'N/A';
@@ -85,10 +160,8 @@ function extractWebhookDetails(body) {
     details.boardName = boards?.[0]?.name || 'N/A';
     details.listName = lists?.[0]?.name || 'N/A';
     
-    // Parse description for Slack channels (only for non-comment events)
-    if (!details.isComment) {
-      details.slackChannels = parseSlackChannels(item.description);
-    }
+    // Parse description for Slack channels (for both card and comment events)
+    details.slackChannels = parseNotifyChannels(details.description);
   }
 
   return details;
@@ -186,6 +259,10 @@ const server = http.createServer(async (req, res) => {
       console.log(`  Slack Channels: ${details.slackChannels.join(', ')}`);
     }
     
+    if (shouldSendNotification(JSON.parse(body).event, details)) {
+      sendNotification(JSON.parse(body).event, details);
+    }
+    
     sendJsonResponse(res, 200, {
       status: 'success',
       message: 'Webhook received successfully',
@@ -215,7 +292,6 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`🚀 Webhook server is running on port ${PORT}`);
   console.log(`📡 Webhook URL: http://localhost:${PORT}/webhook`);
-  console.log(`🔐 Access token required for webhook endpoint`);
   console.log(`🏥 Health check: http://localhost:${PORT}/health`);
   console.log(`⏰ Started at: ${new Date().toISOString()}`);
   console.log('\nWaiting for Planka webhooks...\n');
