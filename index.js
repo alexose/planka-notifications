@@ -24,9 +24,8 @@ function extractWebhookDetails(body) {
     username: 'N/A'
   };
 
-  // Handle different webhook formats
+  // Handle Planka webhook format
   if (data.data && data.data.item) {
-    // Standard Planka format - card data is in data.item
     details.cardTitle = data.data.item.name || 'N/A';
     details.username = data.user?.name || data.user?.username || 'N/A';
     
@@ -36,11 +35,6 @@ function extractWebhookDetails(body) {
     
     details.boardName = boards?.[0]?.name || 'N/A';
     details.listName = lists?.[0]?.name || 'N/A';
-    
-  } else if (data.title) {
-    // Apprise format - title might contain card info
-    details.cardTitle = data.title;
-    details.username = data.body?.match(/by\s+([^\n]+)/)?.[1] || 'N/A';
   }
 
   return details;
@@ -112,9 +106,8 @@ const server = http.createServer(async (req, res) => {
       version: '1.0.0',
       status: 'running',
       endpoints: {
-        root: 'POST / - Accepts webhooks (auto-detects format)',
+        root: 'POST / - Accepts webhooks',
         webhook: 'POST /webhook - Standard webhook endpoint',
-        apprise: 'POST /apprise - Apprise format endpoint',
         health: 'GET /health - Health check'
       },
       timestamp: new Date().toISOString()
@@ -135,21 +128,6 @@ const server = http.createServer(async (req, res) => {
       timestamp: new Date().toISOString()
     });
 
-  } else if (method === 'POST' && path === '/apprise') {
-    // Apprise endpoint for Planka
-    const details = extractWebhookDetails(body);
-    console.log(`Webhook POST received via /apprise`);
-    console.log(`  Card: ${details.cardTitle}`);
-    console.log(`  Board: ${details.boardName}`);
-    console.log(`  List: ${details.listName}`);
-    console.log(`  User: ${details.username}`);
-    
-    sendJsonResponse(res, 200, {
-      status: 'success',
-      message: 'Apprise webhook received successfully',
-      timestamp: new Date().toISOString()
-    });
-
   } else if (method === 'GET' && path === '/health') {
     // Health check endpoint
     sendJsonResponse(res, 200, {
@@ -164,7 +142,7 @@ const server = http.createServer(async (req, res) => {
     sendJsonResponse(res, 404, {
       error: 'Not found',
       message: 'This endpoint is not configured',
-      availableEndpoints: ['POST /', 'POST /webhook', 'POST /apprise', 'GET /', 'GET /health']
+      availableEndpoints: ['POST /', 'POST /webhook', 'GET /', 'GET /health']
     });
   }
 });
@@ -174,7 +152,6 @@ server.listen(PORT, () => {
   console.log(`🚀 Webhook server is running on port ${PORT}`);
   console.log(`📡 Root webhook URL: http://localhost:${PORT}/`);
   console.log(`📡 Webhook URL: http://localhost:${PORT}/webhook`);
-  console.log(`📢 Apprise URL: http://localhost:${PORT}/apprise`);
   console.log(`🏥 Health check: http://localhost:${PORT}/health`);
   console.log(`⏰ Started at: ${new Date().toISOString()}`);
   console.log('\nWaiting for Planka webhooks...\n');
