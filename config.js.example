@@ -5,25 +5,25 @@ module.exports = {
   // Access token for webhook authentication
   // This should match the token configured in your Docker Compose file
   accessToken: 'your-secret-access-token-here',
-  
+
   // Server configuration
   port: 3001,
-  
+
   // Slack webhook configuration
   slack: {
     // Slack webhook URL (get this from Slack app settings)
     webhookUrl: 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL',
-    
+
     // Optional: Default channel to post to if no channels specified
     defaultChannel: '#general',
-    
+
     // Optional: Bot username for messages
     botUsername: 'Planka Bot',
-    
+
     // Optional: Bot icon (emoji or URL)
     botIcon: ':card_index:'
   },
-  
+
   // Optional: Log level for debugging
   logLevel: 'info' // 'debug', 'info', 'warn', 'error'
-}; 
+};

@@ -10,7 +10,14 @@
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
-  "keywords": ["webhook", "planka", "kanban"],
+  "keywords": [
+    "webhook",
+    "planka",
+    "kanban"
+  ],
   "author": "",
-  "license": "MIT"
-} 
+  "license": "MIT",
+  "dependencies": {
+    "prettier": "^3.5.3"
+  }
+}
