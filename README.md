@@ -5,7 +5,7 @@ A minimal webhook server that bridges Planka's notification system with Slack.
 <img
   src="https://github.com/user-attachments/assets/61d5f324-bc82-41ac-b74b-808c88b32821"
   alt="image"
-  style="max-width:500px; width:auto; height:auto;"
+  width="500"
 />
 
 
