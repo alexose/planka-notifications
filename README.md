@@ -1,124 +1,39 @@
-# Planka Webhook Server
+# Planka Notifications
 
-A simple Node.js webhook server that listens for webhooks from the Planka kanban application.
+A minimal webhook server that bridges Planka's notification system with Slack, turning card activities into beautiful, contextual messages.
 
-## Features
+## Philosophy
 
-- Listens on port 3001 for incoming webhooks
-- Logs all incoming requests with detailed information
-- Provides a root endpoint that auto-detects webhook format
-- Provides a dedicated `/webhook` endpoint for Planka
-- Provides an `/apprise` endpoint for Apprise-formatted webhooks
-- Includes health check endpoint
-- Graceful shutdown handling
+Planka is a great kanban tool, but its notifications are limited to the web interface. This project extends Planka's reach by transforming card events—creations, updates, moves, comments—into rich Slack notifications that keep teams informed without context switching.
+
+The goal is simple: when something happens on a card, the right people get notified in the right place with the right context.
+
+## How It Works
+
+Cards with `notify` in their description trigger Slack messages. The system is flexible—you can notify channels (`&shared`, `#general`) and users (`@john`) in natural language:
+
+```
+notify &team-alpha @john
+please notify #general &urgent
+notification: @admin
+```
 
 ## Setup
 
-1. Install dependencies:
-```bash
-npm install
-```
+1. Copy `config.js.example` to `config.js`
+2. Add your Slack webhook URL
+3. Configure Planka to send webhooks to your server
+4. Add `notify` strings to card descriptions
 
-2. Start the server:
-```bash
-npm start
-```
+That's it. No complex integrations, no external dependencies—just a simple bridge between two systems that should talk to each other.
 
-For development with auto-restart:
-```bash
-npm run dev
-```
+## The Result
 
-## Usage
+Instead of checking Planka constantly, your team gets contextual updates in Slack:
 
-The server will start on `http://localhost:3001` with the following endpoints:
+- 🆕 New cards appear with board/list context
+- ✏️ Updates show what changed and by whom  
+- 📤 Card moves track workflow progress
+- 💬 Comments include the full conversation
 
-- **POST `/`** - Root endpoint that accepts webhooks (auto-detects format)
-- **GET `/`** - Server information and available endpoints
-- **POST `/webhook`** - Standard webhook endpoint for Planka
-- **POST `/apprise`** - Apprise-formatted webhook endpoint for Planka
-- **GET `/health`** - Health check endpoint
-- **Any other route** - Returns 404 with available endpoints
-
-## Webhook URLs
-
-Configure your Planka webhook to point to any of these URLs:
-
-**Root endpoint (recommended - auto-detects format):**
-```
-http://localhost:3001/
-```
-
-**Standard webhook:**
-```
-http://localhost:3001/webhook
-```
-
-**Apprise webhook:**
-```
-http://localhost:3001/apprise
-```
-
-## Auto-Detection
-
-The root endpoint (`POST /`) automatically detects whether the webhook is in Apprise format or standard format based on the presence of `title` and `body` fields. This makes it the most flexible option for Planka configuration.
-
-## Apprise Format
-
-The `/apprise` endpoint and root endpoint are designed to handle Apprise-formatted webhooks from Planka. They will parse and log the following Apprise fields:
-
-- `title` - Notification title
-- `body` - Notification body/message
-- `type` - Notification type
-- `format` - Message format
-- `tag` - Notification tags
-- `url` - Related URL
-
-## Console Output
-
-The server will log all incoming requests with:
-- Request method and URL
-- Headers
-- Request body
-- Query parameters
-- Timestamp
-
-For Apprise webhooks, it will also display formatted fields for better readability.
-
-## Example Output
-
-```
-🚀 Webhook server is running on port 3001
-📡 Root webhook URL: http://localhost:3001/
-📡 Webhook URL: http://localhost:3001/webhook
-📢 Apprise URL: http://localhost:3001/apprise
-🏥 Health check: http://localhost:3001/health
-⏰ Started at: 2024-01-15T10:30:00.000Z
-
-Waiting for Planka webhooks...
-
-=== Incoming POST Request ===
-URL: /
-Headers: { 'content-type': 'application/json', ... }
-Body: { "title": "New Card Created", "body": "A new card was added to the board", ... }
-Query: {}
-Timestamp: 2024-01-15T10:30:15.000Z
-=====================================
-
-🎯 Planka webhook received at root!
-Webhook data: {
-  "title": "New Card Created",
-  "body": "A new card was added to the board",
-  "type": "info",
-  "format": "text"
-}
-📢 Detected Apprise format webhook
-📋 Title: New Card Created
-📝 Body: A new card was added to the board
-🏷️  Type: info
-📄 Format: text
-```
-
-## Stopping the Server
-
-Press `Ctrl+C` to gracefully stop the server. 
+The notifications are rich, actionable, and respect your team's existing workflow. 
