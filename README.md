@@ -2,6 +2,9 @@
 
 A minimal webhook server that bridges Planka's notification system with Slack.
 
+![image](https://github.com/user-attachments/assets/61d5f324-bc82-41ac-b74b-808c88b32821)
+
+
 ## Philosophy
 
 Planka is a great kanban tool, but its notifications are limited to the web interface.
