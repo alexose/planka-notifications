@@ -18,47 +18,48 @@ const DEFAULT_DETAILS = {
   boardName: 'N/A', 
   listName: 'N/A',
   username: 'N/A',
-  slackChannels: [],
+  slackTargets: [],
   commentText: null,
   isComment: false,
   description: null
 };
 
 /**
- * Parses a description for Slack channel notifications.
+ * Parses a description for Slack channel and user notifications.
  * 
  * This function looks for lines that contain the words "notify" or "notification"
- * and extracts any Slack channel names that start with an ampersand (&) or hash (#).
+ * and extracts any Slack channel names or user mentions.
  * 
- * Slack channel prefixes:
+ * Slack prefixes:
  * - & (ampersand) - for shared channels
  * - # (hash/pound) - for regular channels
+ * - @ (at sign) - for user mentions
  * 
  * The function is flexible and handles various formats:
  * - "notify &general" → finds &general
  * - "notification: #team-alpha" → finds #team-alpha  
- * - "please notify &urgent, #important" → finds &urgent, #important
- * - "NOTIFY &channel-name" → finds &channel-name (case insensitive)
- * - "notify &channel1 #channel2 &channel3" → finds all three channels
+ * - "please notify @john &urgent, #important" → finds @john, &urgent, #important
+ * - "NOTIFY &channel-name @user" → finds &channel-name, @user (case insensitive)
+ * - "notify &channel1 #channel2 @user1 @user2" → finds all four targets
  * 
  * @param {string} description - The text to parse for notifications
- * @returns {string[]} Array of Slack channel names (including the prefix symbol)
+ * @returns {string[]} Array of Slack channels and users (including the prefix symbol)
  * 
  * @example
  * const description = `
  *   This is a regular description line
- *   notify &general #team-alpha
- *   Another line with notification: &urgent
+ *   notify &general #team-alpha @john
+ *   Another line with notification: &urgent @admin
  * `;
- * const channels = parseNotifyChannels(description);
- * // Returns: ['&general', '#team-alpha', '&urgent']
+ * const targets = parseNotifyChannels(description);
+ * // Returns: ['&general', '#team-alpha', '@john', '&urgent', '@admin']
  */
 function parseNotifyChannels(description) {
   if (!description || typeof description !== 'string') {
     return [];
   }
   
-  const channels = [];
+  const targets = [];
   const lines = description.split('\n');
   
   for (const line of lines) {
@@ -68,22 +69,22 @@ function parseNotifyChannels(description) {
     if (trimmedLine.toLowerCase().includes('notify') || 
         trimmedLine.toLowerCase().includes('notification')) {
       
-      // Find all strings starting with & or # followed by valid channel characters
-      // This regex matches: & or # + one or more word characters, hyphens, or underscores
-      const channelMatches = trimmedLine.match(/[&#][a-zA-Z0-9_-]+/g);
+      // Find all strings starting with &, #, or @ followed by valid characters
+      // This regex matches: &, #, or @ + one or more word characters, hyphens, or underscores
+      const targetMatches = trimmedLine.match(/[&#@][a-zA-Z0-9_-]+/g);
       
-      if (channelMatches) {
-        // Add unique channels only (avoid duplicates)
-        for (const channel of channelMatches) {
-          if (!channels.includes(channel)) {
-            channels.push(channel);
+      if (targetMatches) {
+        // Add unique targets only (avoid duplicates)
+        for (const target of targetMatches) {
+          if (!targets.includes(target)) {
+            targets.push(target);
           }
         }
       }
     }
   }
   
-  return channels;
+  return targets;
 }
 
 // Helper function to determine if a notification should be sent
@@ -100,20 +101,12 @@ function shouldSendNotification(event, details) {
     'commentUpdate'
   ];
   
-  return relevantEvents.includes(event) && details.slackChannels.length > 0;
+  return relevantEvents.includes(event) && details.slackTargets.length > 0;
 }
 
 // Helper function to send notification (placeholder for now)
 function sendNotification(event, details) {
-  console.log(`🔔 NOTIFICATION SHOULD BE SENT:`);
-  console.log(`  Event: ${event}`);
-  console.log(`  Card: ${details.cardTitle}`);
-  console.log(`  Board: ${details.boardName}`);
-  console.log(`  List: ${details.listName}`);
-  console.log(`  User: ${details.username}`);
-  console.log(`  Channels: ${details.slackChannels.join(', ')}`);
-  console.log(`  Description: ${details.description || 'N/A'}`);
-  console.log(`  ---`);
+  console.log(`🔔 NOTIFY: ${event} on "${details.cardTitle}" → ${details.slackTargets.join(', ')}`);
   
   // TODO: Integrate with Slack API here
   // For now, just log that notification should be sent
@@ -161,7 +154,7 @@ function extractWebhookDetails(body) {
     details.listName = lists?.[0]?.name || 'N/A';
     
     // Parse description for Slack channels (for both card and comment events)
-    details.slackChannels = parseNotifyChannels(details.description);
+    details.slackTargets = parseNotifyChannels(details.description);
   }
 
   return details;
@@ -246,21 +239,13 @@ const server = http.createServer(async (req, res) => {
     
     // Webhook endpoint for Planka
     const details = extractWebhookDetails(body);
-    console.log(`Webhook POST received via /webhook`);
-    console.log(`  Event: ${JSON.parse(body).event || 'unknown'}`);
-    console.log(`  Card: ${details.cardTitle}`);
-    console.log(`  Board: ${details.boardName}`);
-    console.log(`  List: ${details.listName}`);
-    console.log(`  User: ${details.username}`);
+    const event = JSON.parse(body).event || 'unknown';
     
-    if (details.isComment) {
-      console.log(`  Comment: ${details.commentText}`);
-    } else if (details.slackChannels.length > 0) {
-      console.log(`  Slack Channels: ${details.slackChannels.join(', ')}`);
-    }
+    // Minimal debug output
+    console.log(`📨 ${event} on "${details.cardTitle}"`);
     
-    if (shouldSendNotification(JSON.parse(body).event, details)) {
-      sendNotification(JSON.parse(body).event, details);
+    if (shouldSendNotification(event, details)) {
+      sendNotification(event, details);
     }
     
     sendJsonResponse(res, 200, {
