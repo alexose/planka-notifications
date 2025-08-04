@@ -9,10 +9,16 @@ module.exports = {
   // Server configuration
   port: 3001,
 
-  // Slack webhook configuration
+  // Slack configuration
   slack: {
-    // Slack webhook URL (get this from Slack app settings)
-    webhookUrl: 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL',
+    // Bot User OAuth Token (starts with xoxb-)
+    // Required: Get this from your Slack app's OAuth & Permissions page
+    // Needs scope: chat:write.public (to post to any public channel)
+    botToken: 'xoxb-YOUR-BOT-TOKEN-HERE',
+    
+    // Optional: Channel where the bot will log when it can't access requested channels
+    // Make sure to invite the bot to this channel first!
+    loggingChannel: '#planka-bot-logs',
 
     // Optional: Default channel to post to if no channels specified
     defaultChannel: '#general',

@@ -189,7 +189,7 @@ function validateAccessToken(req) {
 }
 
 /**
- * Sends a notification to Slack using webhook URL.
+ * Sends a notification to Slack using the Web API (Bot Token).
  *
  * @param {string} event - The Planka event type (e.g., 'cardCreate', 'commentCreate')
  * @param {Object} details - The card/comment details
@@ -197,45 +197,49 @@ function validateAccessToken(req) {
  * @returns {Promise<boolean>} - True if successful, false if failed
  */
 async function sendSlackNotification(event, details, targets) {
-  // Check if Slack is configured
-  if (
-    !config.slack ||
-    !config.slack.webhookUrl ||
-    config.slack.webhookUrl === 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL'
-  ) {
-    console.log('⚠️  Slack webhook not configured. Skipping notification.');
+  // Check if Slack Bot Token is configured
+  if (!config.slack || !config.slack.botToken) {
+    console.log('⚠️  Slack bot token not configured. Skipping notification.');
     return false;
   }
 
   try {
     // Determine the channel to post to
-    let channel = config.slack.defaultChannel;
+    let channel = config.slack.defaultChannel || '#general';
     const channelTargets = targets.filter((target) => target.startsWith('&') || target.startsWith('#'));
 
     if (channelTargets.length > 0) {
-      // Use the first channel found (Slack webhooks can only post to one channel)
+      // Use the first channel found
       channel = channelTargets[0];
     }
 
     // Build the message
     const message = buildSlackMessage(event, details, targets);
 
-    // Prepare the webhook payload
+    // Convert channel name to proper format (remove prefix for API call)
+    const channelName = channel.replace(/^[&#]/, '');
+
+    // Prepare the API payload
     const payload = {
-      channel: channel,
+      channel: channelName,
       username: config.slack.botUsername || 'Planka Bot',
       icon_emoji: config.slack.botIcon || ':card_index:',
-      ...message,
+      text: message.attachments[0].text,
+      attachments: message.attachments,
     };
 
-    // Send the webhook
-    const response = await sendWebhookRequest(config.slack.webhookUrl, payload);
+    // Send via Web API
+    const response = await makeSlackApiRequest('chat.postMessage', payload);
 
     if (response.ok) {
       console.log(`✅ Slack notification sent to ${channel}`);
       return true;
     } else {
       console.log(`❌ Slack notification failed: ${response.error}`);
+      // If API fails due to channel access, log it
+      if (response.error === 'channel_not_found' || response.error === 'not_in_channel') {
+        await logChannelAccessError(channel, details.cardTitle);
+      }
       return false;
     }
   } catch (error) {
@@ -305,39 +309,94 @@ function buildSlackMessage(event, details, targets) {
 }
 
 /**
- * Sends an HTTP POST request to the Slack webhook URL.
+ * Checks if the bot has access to a specific Slack channel using the Web API.
  *
- * @param {string} webhookUrl - The Slack webhook URL
- * @param {Object} payload - The message payload
- * @returns {Promise<Object>} - Response object
+ * @param {string} channel - The channel name (with # or & prefix)
+ * @returns {Promise<boolean>} - True if bot has access, false otherwise
  */
-function sendWebhookRequest(webhookUrl, payload) {
-  return new Promise((resolve, reject) => {
-    const urlParts = url.parse(webhookUrl);
+async function checkChannelAccess(channel) {
+  if (!config.slack.botToken) {
+    return true; // Skip check if no bot token configured
+  }
 
+  try {
+    // Convert channel name to proper format (remove prefix for API call)
+    const channelName = channel.replace(/^[&#]/, '');
+    
+    const response = await makeSlackApiRequest('conversations.info', {
+      channel: channelName,
+    });
+
+    return response.ok;
+  } catch (error) {
+    console.log(`❌ Error checking channel access for ${channel}: ${error.message}`);
+    return false;
+  }
+}
+
+/**
+ * Logs a channel access error to the designated logging channel.
+ *
+ * @param {string} channel - The channel that couldn't be accessed
+ * @param {string} cardTitle - The card title that triggered the notification
+ */
+async function logChannelAccessError(channel, cardTitle) {
+  if (!config.slack.loggingChannel || !config.slack.botToken) {
+    console.log(`⚠️  Cannot access ${channel} and no logging channel configured`);
+    return;
+  }
+
+  try {
+    const message = {
+      channel: config.slack.loggingChannel.replace(/^#/, ''),
+      text: `🚫 *Channel Access Needed*\n\nI need to be invited to ${channel} to send notifications.\n\nTriggered by Planka card: "${cardTitle}"\n\nTo fix this, someone with access to ${channel} should run:\n\`/invite @${config.slack.botUsername || 'Planka Bot'}\``,
+      username: config.slack.botUsername || 'Planka Bot',
+      icon_emoji: config.slack.botIcon || ':warning:',
+    };
+
+    await makeSlackApiRequest('chat.postMessage', message);
+    console.log(`📝 Logged channel access error for ${channel} to ${config.slack.loggingChannel}`);
+  } catch (error) {
+    console.log(`❌ Error logging channel access error: ${error.message}`);
+  }
+}
+
+/**
+ * Makes a request to the Slack Web API.
+ *
+ * @param {string} method - The API method (e.g., 'chat.postMessage')
+ * @param {Object} data - The request data
+ * @returns {Promise<Object>} - The API response
+ */
+async function makeSlackApiRequest(method, data) {
+  return new Promise((resolve, reject) => {
+    const postData = JSON.stringify(data);
+    
     const options = {
-      hostname: urlParts.hostname,
-      port: urlParts.port || 443,
-      path: urlParts.path,
+      hostname: 'slack.com',
+      port: 443,
+      path: `/api/${method}`,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(JSON.stringify(payload)),
+        'Authorization': `Bearer ${config.slack.botToken}`,
+        'Content-Length': Buffer.byteLength(postData),
       },
     };
 
-    const req = http.request(options, (res) => {
-      let data = '';
+    const req = require('https').request(options, (res) => {
+      let responseData = '';
 
       res.on('data', (chunk) => {
-        data += chunk;
+        responseData += chunk;
       });
 
       res.on('end', () => {
-        if (res.statusCode === 200) {
-          resolve({ ok: true, data: data });
-        } else {
-          resolve({ ok: false, error: `HTTP ${res.statusCode}: ${data}` });
+        try {
+          const response = JSON.parse(responseData);
+          resolve(response);
+        } catch (error) {
+          reject(new Error(`Invalid JSON response: ${responseData}`));
         }
       });
     });
@@ -346,10 +405,11 @@ function sendWebhookRequest(webhookUrl, payload) {
       reject(error);
     });
 
-    req.write(JSON.stringify(payload));
+    req.write(postData);
     req.end();
   });
 }
+
 
 // Create HTTP server
 const server = http.createServer(async (req, res) => {

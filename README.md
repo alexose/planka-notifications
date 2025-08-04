@@ -30,7 +30,12 @@ notification: @admin
 ## Setup
 
 1. Copy `config.js.example` to `config.js`
-2. Add your Slack webhook URL
+2. Configure your Slack app:
+   - Create a new Slack app at https://api.slack.com/apps
+   - Add OAuth scope: `chat:write.public` (allows posting to any public channel)
+   - Install the app to your workspace to get a Bot User OAuth Token (starts with `xoxb-`)
+   - Copy the Bot Token to `config.js`
+   - Optional: Create a `#planka-bot-logs` channel and invite your bot for error logging
 3. Configure Planka to send webhooks to your server
 4. Add `notify` strings to card descriptions
 
