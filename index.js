@@ -263,7 +263,6 @@ async function sendSlackNotification(event, details, targets) {
       channel: channelName,
       username: config.slack.botUsername || 'Planka Bot',
       icon_emoji: config.slack.botIcon || ':card_index:',
-      text: message.attachments[0].text,
       attachments: message.attachments,
     };
 
@@ -299,46 +298,44 @@ function buildSlackMessage(event, details, targets) {
   const userTargets = targets.filter((target) => target.startsWith('@'));
   const userMentions = userTargets.length > 0 ? ` ${userTargets.join(' ')}` : '';
 
-  // Event-specific messages
-  let title, text, color;
+  // Event-specific messages - more concise format
+  let text, color;
 
   switch (event) {
     case 'cardCreate':
-      title = '🆕 New Card Created';
-      text = `*${details.cardTitle}* was created by ${details.username} in *${details.boardName}* > *${details.listName}*${userMentions}`;
+      text = `🆕 *${details.cardTitle}*\nCreated by ${details.username} in ${details.boardName} › ${details.listName}${userMentions}`;
       color = '#36a64f'; // Green
       break;
 
     case 'cardUpdate':
     case 'cardEdit':
-      title = '✏️ Card Updated';
       if (details.changes && details.changes.length > 0) {
         // Show what specifically changed
-        const changesSummary = details.changes.slice(0, 3).join(', ');
-        const moreChanges = details.changes.length > 3 ? ` (+${details.changes.length - 3} more)` : '';
-        text = `*${details.cardTitle}* updated by ${details.username}\n📝 Changed: ${changesSummary}${moreChanges}\n📍 ${details.boardName} > ${details.listName}${userMentions}`;
+        const changesSummary = details.changes.slice(0, 2).join('\n• ');
+        const moreChanges = details.changes.length > 2 ? `\n• (+${details.changes.length - 2} more)` : '';
+        text = `✏️ *${details.cardTitle}*\n• ${changesSummary}${moreChanges}\n_${details.username} in ${details.boardName} › ${details.listName}_${userMentions}`;
       } else {
         // Fallback if no specific changes detected
-        text = `*${details.cardTitle}* was updated by ${details.username} in *${details.boardName}* > *${details.listName}*${userMentions}`;
+        text = `✏️ *${details.cardTitle}*\nUpdated by ${details.username} in ${details.boardName} › ${details.listName}${userMentions}`;
       }
       color = '#ff9500'; // Orange
       break;
 
     case 'cardMove':
-      title = '📤 Card Moved';
-      text = `*${details.cardTitle}* was moved by ${details.username} to *${details.listName}* in *${details.boardName}*${userMentions}`;
+      text = `📤 *${details.cardTitle}*\nMoved to ${details.listName} by ${details.username}${userMentions}`;
       color = '#007cba'; // Blue
       break;
 
     case 'commentCreate':
-      title = '💬 New Comment';
-      text = `${details.username} commented on *${details.cardTitle}* in *${details.boardName}* > *${details.listName}*${userMentions}\n\n>${details.commentText}`;
+      const truncatedComment = details.commentText && details.commentText.length > 100 
+        ? details.commentText.substring(0, 100) + '...' 
+        : details.commentText;
+      text = `💬 *${details.cardTitle}*\n_${details.username}:_ ${truncatedComment}${userMentions}`;
       color = '#9c27b0'; // Purple
       break;
 
     default:
-      title = '📋 Card Activity';
-      text = `*${details.cardTitle}* - ${event} by ${details.username} in *${details.boardName}* > *${details.listName}*${userMentions}`;
+      text = `📋 *${details.cardTitle}*\n${event} by ${details.username}${userMentions}`;
       color = '#607d8b'; // Grey
   }
 
@@ -346,7 +343,6 @@ function buildSlackMessage(event, details, targets) {
     attachments: [
       {
         color: color,
-        title: title,
         text: text,
         footer: 'Planka',
         ts: Math.floor(Date.now() / 1000),
