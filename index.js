@@ -513,11 +513,23 @@ const server = http.createServer(async (req, res) => {
     let eventDescription = `📨 ${event} on "${details.cardTitle}"`;
     if (event === 'cardUpdate' && details.changes && details.changes.length > 0) {
       eventDescription += ` - ${details.changes.join(', ')}`;
+    } else if (event === 'commentCreate') {
+      eventDescription += ` - comment: "${details.commentText?.substring(0, 50)}..."`;
+      if (details.slackTargets.length === 0) {
+        console.log(`  ⚠️  No notification channels found in card description`);
+        if (details.description) {
+          console.log(`  📝 Card description: "${details.description.substring(0, 100)}..."`);
+        } else {
+          console.log(`  📝 Card has no description`);
+        }
+      }
     }
     console.log(eventDescription);
 
     if (shouldSendNotification(event, details)) {
       sendNotification(event, details);
+    } else if (event === 'commentCreate' && details.slackTargets.length === 0) {
+      console.log(`  ℹ️  Comment not sent to Slack (no notify channels in card description)`);
     }
 
     sendJsonResponse(res, 200, {
