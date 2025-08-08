@@ -123,8 +123,9 @@ function extractWebhookDetails(body) {
   let details = { ...DEFAULT_DETAILS };
 
   // Handle Planka webhook format
-  const { data: webhookData, user } = data || {};
-  const { item, included, prevItem } = webhookData || {};
+  const { data: webhookData, prevData, user } = data || {};
+  const { item, included } = webhookData || {};
+  const prevItem = prevData?.item;
 
   if (item) {
     // For comment events, the card title might be in included data
@@ -172,7 +173,7 @@ function extractWebhookDetails(body) {
         const newDesc = item.description ? 
           (item.description.length > 20 ? item.description.substring(0, 20) + '...' : item.description) : 
           '(empty)';
-        details.changes.push(`description: "${prevDesc}" → "${newDesc}"`);
+        details.changes.push(`description updated`);
       }
       
       // Check for due date change
@@ -184,12 +185,14 @@ function extractWebhookDetails(body) {
       
       // Check for position/list change
       if (prevItem.listId !== item.listId) {
-        details.changes.push('moved to different list');
+        const prevList = prevData?.included?.lists?.[0]?.name || 'unknown';
+        const newList = lists?.[0]?.name || 'unknown';
+        details.changes.push(`moved: ${prevList} → ${newList}`);
       }
       
       // Check for other common fields
       if (prevItem.isCompleted !== item.isCompleted) {
-        details.changes.push(item.isCompleted ? 'marked as completed' : 'marked as incomplete');
+        details.changes.push(item.isCompleted ? 'marked completed' : 'marked incomplete');
       }
     }
   }
@@ -311,12 +314,12 @@ function buildSlackMessage(event, details, targets) {
     case 'cardEdit':
       if (details.changes && details.changes.length > 0) {
         // Show what specifically changed
-        const changesSummary = details.changes.slice(0, 2).join('\n• ');
-        const moreChanges = details.changes.length > 2 ? `\n• (+${details.changes.length - 2} more)` : '';
-        text = `✏️ *${details.cardTitle}*\n• ${changesSummary}${moreChanges}\n_${details.username} in ${details.boardName} › ${details.listName}_${userMentions}`;
+        const changesSummary = details.changes.slice(0, 3).join(', ');
+        const moreChanges = details.changes.length > 3 ? ` (+${details.changes.length - 3} more)` : '';
+        text = `✏️ *${details.cardTitle}*\n_${changesSummary}${moreChanges}_\n${details.username} in ${details.boardName} › ${details.listName}${userMentions}`;
       } else {
         // Fallback if no specific changes detected
-        text = `✏️ *${details.cardTitle}*\nUpdated by ${details.username} in ${details.boardName} › ${details.listName}${userMentions}`;
+        text = `✏️ *${details.cardTitle}*\n_Updated by ${details.username}_\n${details.boardName} › ${details.listName}${userMentions}`;
       }
       color = '#ff9500'; // Orange
       break;
