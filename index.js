@@ -21,6 +21,9 @@ const DEFAULT_DETAILS = {
   slackTargets: [],
   commentText: null,
   isComment: false,
+  isTask: false,
+  taskName: null,
+  taskCompleted: false,
   description: null,
   changes: [],
 };
@@ -88,7 +91,7 @@ function parseNotifyChannels(description) {
 
 // Helper function to determine if a notification should be sent
 function shouldSendNotification(event, details) {
-  // Send notifications for relevant card events and comment events
+  // Send notifications for relevant card events, comment events, and task events
   const relevantEvents = [
     'cardCreate',
     'cardUpdate',
@@ -98,6 +101,9 @@ function shouldSendNotification(event, details) {
     'cardRestore',
     'commentCreate',
     'commentUpdate',
+    'taskCreate',
+    'taskUpdate',
+    'taskDelete',
   ];
 
   return relevantEvents.includes(event) && details.slackTargets.length > 0;
@@ -134,6 +140,18 @@ function extractWebhookDetails(body) {
       details.commentText = item.text || item.content || 'N/A';
 
       // Try to get card title and description from included cards data
+      const cards = included?.cards;
+      if (cards && cards.length > 0) {
+        details.cardTitle = cards[0].name || 'N/A';
+        details.description = cards[0].description || null;
+      }
+    } else if (data.event && (data.event.includes('task') || data.event.includes('Task'))) {
+      // For task events, get task details and card info from included data
+      details.isTask = true;
+      details.taskName = item.name || 'N/A';
+      details.taskCompleted = item.isCompleted || false;
+      
+      // Get card info from included data
       const cards = included?.cards;
       if (cards && cards.length > 0) {
         details.cardTitle = cards[0].name || 'N/A';
@@ -337,6 +355,22 @@ function buildSlackMessage(event, details, targets) {
       color = '#9c27b0'; // Purple
       break;
 
+    case 'taskCreate':
+      text = `☑️ *${details.cardTitle}*\nNew task: "${details.taskName}"\n_Added by ${details.username}_${userMentions}`;
+      color = '#4caf50'; // Green
+      break;
+
+    case 'taskUpdate':
+      const taskStatus = details.taskCompleted ? '✅ completed' : '⬜ uncompleted';
+      text = `☑️ *${details.cardTitle}*\nTask "${details.taskName}" ${taskStatus}\n_Updated by ${details.username}_${userMentions}`;
+      color = '#ff9800'; // Orange
+      break;
+
+    case 'taskDelete':
+      text = `☑️ *${details.cardTitle}*\nTask "${details.taskName}" deleted\n_Removed by ${details.username}_${userMentions}`;
+      color = '#f44336'; // Red
+      break;
+
     default:
       text = `📋 *${details.cardTitle}*\n${event} by ${details.username}${userMentions}`;
       color = '#607d8b'; // Grey
@@ -523,13 +557,18 @@ const server = http.createServer(async (req, res) => {
           console.log(`  📝 Card has no description`);
         }
       }
+    } else if (event.includes('task') || event.includes('Task')) {
+      eventDescription += ` - task: "${details.taskName}"`;
+      if (event === 'taskUpdate' && details.taskCompleted !== undefined) {
+        eventDescription += details.taskCompleted ? ' (completed)' : ' (uncompleted)';
+      }
     }
     console.log(eventDescription);
 
     if (shouldSendNotification(event, details)) {
       sendNotification(event, details);
-    } else if (event === 'commentCreate' && details.slackTargets.length === 0) {
-      console.log(`  ℹ️  Comment not sent to Slack (no notify channels in card description)`);
+    } else if ((event === 'commentCreate' || event.includes('task')) && details.slackTargets.length === 0) {
+      console.log(`  ℹ️  ${event} not sent to Slack (no notify channels in card description)`);
     }
 
     sendJsonResponse(res, 200, {
