@@ -542,6 +542,9 @@ const server = http.createServer(async (req, res) => {
     // Webhook endpoint for Planka
     const details = extractWebhookDetails(body);
     const event = JSON.parse(body).event || 'unknown';
+    
+    // Simple debug: log ALL events that reach us
+    console.log(`🌐 Raw webhook event: ${event}`);
 
     // More informative debug output
     let eventDescription = `📨 ${event} on "${details.cardTitle}"`;
