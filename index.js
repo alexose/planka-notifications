@@ -22,6 +22,7 @@ const DEFAULT_DETAILS = {
   commentText: null,
   isComment: false,
   description: null,
+  changes: [],
 };
 
 /**
@@ -123,7 +124,7 @@ function extractWebhookDetails(body) {
 
   // Handle Planka webhook format
   const { data: webhookData, user } = data || {};
-  const { item, included } = webhookData || {};
+  const { item, included, prevItem } = webhookData || {};
 
   if (item) {
     // For comment events, the card title might be in included data
@@ -153,6 +154,44 @@ function extractWebhookDetails(body) {
 
     // Parse description for Slack channels (for both card and comment events)
     details.slackTargets = parseNotifyChannels(details.description);
+
+    // Detect what changed for update events
+    if (prevItem && data.event === 'cardUpdate') {
+      details.changes = [];
+      
+      // Check for title change
+      if (prevItem.name !== item.name) {
+        details.changes.push(`title: "${prevItem.name}" → "${item.name}"`);
+      }
+      
+      // Check for description change
+      if (prevItem.description !== item.description) {
+        const prevDesc = prevItem.description ? 
+          (prevItem.description.length > 20 ? prevItem.description.substring(0, 20) + '...' : prevItem.description) : 
+          '(empty)';
+        const newDesc = item.description ? 
+          (item.description.length > 20 ? item.description.substring(0, 20) + '...' : item.description) : 
+          '(empty)';
+        details.changes.push(`description: "${prevDesc}" → "${newDesc}"`);
+      }
+      
+      // Check for due date change
+      if (prevItem.dueDate !== item.dueDate) {
+        const prevDate = prevItem.dueDate ? new Date(prevItem.dueDate).toLocaleDateString() : 'none';
+        const newDate = item.dueDate ? new Date(item.dueDate).toLocaleDateString() : 'none';
+        details.changes.push(`due date: ${prevDate} → ${newDate}`);
+      }
+      
+      // Check for position/list change
+      if (prevItem.listId !== item.listId) {
+        details.changes.push('moved to different list');
+      }
+      
+      // Check for other common fields
+      if (prevItem.isCompleted !== item.isCompleted) {
+        details.changes.push(item.isCompleted ? 'marked as completed' : 'marked as incomplete');
+      }
+    }
   }
 
   return details;
@@ -273,7 +312,15 @@ function buildSlackMessage(event, details, targets) {
     case 'cardUpdate':
     case 'cardEdit':
       title = '✏️ Card Updated';
-      text = `*${details.cardTitle}* was updated by ${details.username} in *${details.boardName}* > *${details.listName}*${userMentions}`;
+      if (details.changes && details.changes.length > 0) {
+        // Show what specifically changed
+        const changesSummary = details.changes.slice(0, 3).join(', ');
+        const moreChanges = details.changes.length > 3 ? ` (+${details.changes.length - 3} more)` : '';
+        text = `*${details.cardTitle}* updated by ${details.username}\n📝 Changed: ${changesSummary}${moreChanges}\n📍 ${details.boardName} > ${details.listName}${userMentions}`;
+      } else {
+        // Fallback if no specific changes detected
+        text = `*${details.cardTitle}* was updated by ${details.username} in *${details.boardName}* > *${details.listName}*${userMentions}`;
+      }
       color = '#ff9500'; // Orange
       break;
 
@@ -463,8 +510,12 @@ const server = http.createServer(async (req, res) => {
     const details = extractWebhookDetails(body);
     const event = JSON.parse(body).event || 'unknown';
 
-    // Minimal debug output
-    console.log(`📨 ${event} on "${details.cardTitle}"`);
+    // More informative debug output
+    let eventDescription = `📨 ${event} on "${details.cardTitle}"`;
+    if (event === 'cardUpdate' && details.changes && details.changes.length > 0) {
+      eventDescription += ` - ${details.changes.join(', ')}`;
+    }
+    console.log(eventDescription);
 
     if (shouldSendNotification(event, details)) {
       sendNotification(event, details);
