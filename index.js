@@ -549,6 +549,20 @@ const server = http.createServer(async (req, res) => {
       eventDescription += ` - ${details.changes.join(', ')}`;
     } else if (event === 'commentCreate') {
       eventDescription += ` - comment: "${details.commentText?.substring(0, 50)}..."`;
+      
+      // Debug comment webhook structure
+      const parsedBody = JSON.parse(body);
+      console.log(`  🐛 Comment debug:`);
+      console.log(`    - Has included.cards?`, !!parsedBody.data?.included?.cards);
+      console.log(`    - Cards count:`, parsedBody.data?.included?.cards?.length || 0);
+      if (parsedBody.data?.included?.cards?.[0]) {
+        const card = parsedBody.data.included.cards[0];
+        console.log(`    - Card name:`, card.name);
+        console.log(`    - Card description:`, card.description ? `"${card.description.substring(0, 50)}..."` : 'null');
+      }
+      console.log(`    - Extracted description:`, details.description ? `"${details.description.substring(0, 50)}..."` : 'null');
+      console.log(`    - Slack targets:`, details.slackTargets);
+      
       if (details.slackTargets.length === 0) {
         console.log(`  ⚠️  No notification channels found in card description`);
         if (details.description) {
