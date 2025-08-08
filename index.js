@@ -446,6 +446,8 @@ const server = http.createServer(async (req, res) => {
     // Validate access token for webhook endpoint
     if (!validateAccessToken(req)) {
       console.log(`⚠️  Unauthorized webhook attempt from ${req.socket.remoteAddress}`);
+      console.log('Expected token:', config.accessToken);
+      console.log('Headers received:', JSON.stringify(req.headers, null, 2));
       sendJsonResponse(res, 401, {
         error: 'Unauthorized',
         message: 'Invalid or missing access token',
